@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  /* ── MOAD COLOR PALETTE ── */
+  --color-bright-lavender: #A873EF;
+  --color-mauve: #D39EF6;
+  --color-lavender-veil: #EBDBFC;
+  --color-grapefruit: #FF7776;
+  --color-tangerine: #FEA877;
+  --color-navajo: #FEDBA9;
+  --color-aquamarine: #94F2DB;
+  --color-tea-green: #D6EEC9;
+  --color-ghost-white: #F9FAFE;
+  --color-lavender-grey: #9793A0;
+
+  /* ── TEXT ── */
+  --text-primary: #2D1F4A;
+  --text-secondary: #9793A0;
+  --text-muted: #C0BACC;
+
+  /* ── SURFACES ── */
+  --surface-bg: #F9FAFE;
+  --surface-card: #FFFFFF;
+  --border: rgba(168, 115, 239, 0.10);
+
+  /* ── SHADOWS ── */
+  --shadow-sm: 0 2px 12px rgba(100,60,180,0.10), 0 1px 3px rgba(100,60,180,0.06);
+  --shadow-md: 0 8px 28px rgba(100,60,180,0.16), 0 2px 8px rgba(100,60,180,0.08);
+  --shadow-lg: 0 16px 48px rgba(100,60,180,0.20), 0 4px 12px rgba(100,60,180,0.10);
+
+  /* ── PERSON COLORS ── */
+  --person-britt: #A873EF;
+  --person-chris: #FEA877;
+  --person-liam: #94F2DB;
+  --person-ethan: #FF7776;
+
+  /* ── TYPOGRAPHY ── */
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--surface-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
