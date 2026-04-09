@@ -5,6 +5,8 @@ const key  = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = (url && key) ? createClient(url, key) : null
 
+// ── Task helpers: convert between app's nested format and flat DB rows ──────
+
 const SECTIONS = ['today','week','nextweek','backlog','waiting','delegate','completed']
 
 function toDbTask(task, section) {
@@ -49,6 +51,7 @@ export async function loadTasks() {
   const { data, error } = await supabase.from('tasks').select('*')
   if (error) { console.error('loadTasks:', error); return null }
   if (!data || data.length === 0) return null
+
   const nested = {}
   for (const s of SECTIONS) nested[s] = []
   for (const row of data) {
@@ -67,13 +70,22 @@ export async function saveTasks(taskData) {
       rows.push(toDbTask(task, section))
     }
   }
-  const { error: delError } = await supabase.from('tasks').delete().gte('id', 0)
-  if (delError) { console.error('saveTasks delete:', delError); return }
+  // Upsert current rows, then delete any IDs no longer in taskData
   if (rows.length > 0) {
-    const { error: insError } = await supabase.from('tasks').insert(rows)
-    if (insError) console.error('saveTasks insert:', insError)
+    const { error: upsertError } = await supabase.from('tasks').upsert(rows, { onConflict: 'id' })
+    if (upsertError) { console.error('saveTasks upsert:', upsertError); return }
+  }
+  // Remove tasks that were deleted from the app
+  const currentIds = rows.map(r => r.id)
+  const { data: existing } = await supabase.from('tasks').select('id')
+  const toDelete = (existing || []).map(r => r.id).filter(id => !currentIds.includes(id))
+  if (toDelete.length > 0) {
+    const { error: delError } = await supabase.from('tasks').delete().in('id', toDelete)
+    if (delError) console.error('saveTasks delete old:', delError)
   }
 }
+
+// ── Event helpers ───────────────────────────────────────────────────────────
 
 export async function loadEvents() {
   if (!supabase) return null
@@ -92,8 +104,9 @@ export async function loadEvents() {
 
 export async function saveEvents(events) {
   if (!supabase || !events) return
-  const { error: delError } = await supabase.from('calendar_events').delete().neq('id', '')
-  if (delError) console.error('saveEvents delete:', delError)
+  // Delete all existing rows (id is TEXT so this filter works)
+  const { error: delError } = await supabase.from('calendar_events').delete().not('id', 'is', null)
+  if (delError) { console.error('saveEvents delete:', delError); return }
   if (events.length > 0) {
     const rows = events.map(e => ({
       id:         String(e.id),
@@ -107,6 +120,8 @@ export async function saveEvents(events) {
     if (insError) console.error('saveEvents insert:', insError)
   }
 }
+
+// ── Meal helpers ────────────────────────────────────────────────────────────
 
 export async function loadMeals() {
   if (!supabase) return null
