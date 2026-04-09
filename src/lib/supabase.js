@@ -70,13 +70,17 @@ export async function saveTasks(taskData) {
       rows.push(toDbTask(task, section))
     }
   }
+  // Deduplicate by ID (keep last occurrence in case same task is in multiple sections)
+  const seen = new Map()
+  for (const row of rows) seen.set(row.id, row)
+  const uniqueRows = [...seen.values()]
   // Upsert current rows, then delete any IDs no longer in taskData
-  if (rows.length > 0) {
-    const { error: upsertError } = await supabase.from('tasks').upsert(rows, { onConflict: 'id' })
+  if (uniqueRows.length > 0) {
+    const { error: upsertError } = await supabase.from('tasks').upsert(uniqueRows, { onConflict: 'id' })
     if (upsertError) { console.error('saveTasks upsert:', upsertError); return }
   }
   // Remove tasks that were deleted from the app
-  const currentIds = rows.map(r => r.id)
+  const currentIds = uniqueRows.map(r => r.id)
   const { data: existing } = await supabase.from('tasks').select('id')
   const toDelete = (existing || []).map(r => r.id).filter(id => !currentIds.includes(id))
   if (toDelete.length > 0) {
