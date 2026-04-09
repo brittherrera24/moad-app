@@ -13,6 +13,7 @@ import Knitting from './pages/Knitting'
 import Household from './pages/Household'
 import Achievements from './pages/Achievements'
 import { INITIAL_TASK_DATA } from './taskData'
+import { loadTasks, saveTasks, loadEvents, saveEvents } from './lib/supabase'
 
 const FONT = "'Plus Jakarta Sans', -apple-system, sans-serif"
 const TODAY = '2026-04-08'
@@ -35,7 +36,6 @@ const T = {
   label:    { fontSize:'10px', fontWeight:700 },
 }
 
-// ── ADD EVENT POPUP — lives in App so it works from any page ─────────────────
 function AddEventPopup({ onClose, onAdd }) {
   const [title,  setTitle]  = useState('')
   const [date,   setDate]   = useState(TODAY)
@@ -121,6 +121,42 @@ function App() {
   const [taskData,     setTaskData]     = useState(INITIAL_TASK_DATA)
   const [events,       setEvents]       = useState([])
   const [showAddEvent, setShowAddEvent] = useState(false)
+  const [dbReady,      setDbReady]      = useState(false)
+
+  useEffect(() => {
+    async function init() {
+      try {
+        const [dbTasks, dbEvents] = await Promise.all([loadTasks(), loadEvents()])
+        if (dbTasks) setTaskData(dbTasks)
+        if (dbEvents && dbEvents.length > 0) setEvents(dbEvents)
+      } catch (err) {
+        console.error('Supabase init:', err)
+      }
+      setDbReady(true)
+    }
+    init()
+  }, [])
+
+  const taskSaveTimer = useRef(null)
+  useEffect(() => {
+    if (!dbReady) return
+    clearTimeout(taskSaveTimer.current)
+    taskSaveTimer.current = setTimeout(() => {
+      saveTasks(taskData).catch(err => console.error('saveTasks:', err))
+    }, 500)
+    return () => clearTimeout(taskSaveTimer.current)
+  }, [taskData, dbReady])
+
+  const eventSaveTimer = useRef(null)
+  useEffect(() => {
+    if (!dbReady) return
+    const localEvents = events.filter(e => !String(e.id).startsWith('gcal-'))
+    clearTimeout(eventSaveTimer.current)
+    eventSaveTimer.current = setTimeout(() => {
+      saveEvents(localEvents).catch(err => console.error('saveEvents:', err))
+    }, 500)
+    return () => clearTimeout(eventSaveTimer.current)
+  }, [events, dbReady])
 
   function deleteEvent(id) {
     setEvents(prev=>prev.filter(e=>e.id!==id))
@@ -140,7 +176,7 @@ function App() {
             <Routes>
               <Route path="/"             element={<Home         taskData={taskData} />} />
               <Route path="/tasks"        element={<Tasks        taskData={taskData} setTaskData={setTaskData} />} />
-              <Route path="/calendar"     element={<Calendar     taskData={taskData} setTaskData={setTaskData} customEvents={events} onAddEvent={()=>setShowAddEvent(true)} onDeleteEvent={deleteEvent} onUpdateEvent={updateEvent} />} />
+              <Route path="/calendar"     element={<Calendar     taskData={taskData} setTaskData={setTaskData} customEvents={events} setCustomEvents={setEvents} onAddEvent={()=>setShowAddEvent(true)} onDeleteEvent={deleteEvent} onUpdateEvent={updateEvent} />} />
               <Route path="/health"       element={<Health />} />
               <Route path="/fitness"      element={<Fitness />} />
               <Route path="/meals"        element={<Meals />} />
@@ -153,7 +189,6 @@ function App() {
         </div>
       </div>
 
-      {/* Global popups — inside BrowserRouter so hooks work, fixed position so they overlay everything */}
       {showAddEvent && (
         <AddEventPopup
           onClose={()=>setShowAddEvent(false)}

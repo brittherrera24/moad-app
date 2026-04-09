@@ -234,7 +234,8 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
     ...SEED_EVENTS
       .filter(e=>seedOverrides[e.id]!=='deleted')
       .map(e=>seedOverrides[e.id]||e),
-    ...(customEvents||[])
+    ...(customEvents||[]),
+    ...gcalEvents,
   ]
   const nowTop=(14.3-6)*HOUR_H
 
@@ -368,6 +369,23 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>
           Add Event
         </button>
+        {gcal.isConfigured() && (
+          gcalConnected
+            ? <button onClick={disconnectGcal}
+                style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'20px',border:`1.5px solid ${C.border}`,background:C.card,color:C.textSecond,fontFamily:FONT,...T.bodySm,fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor='#FF7776';e.currentTarget.style.color='#FF7776'}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textSecond}}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#34A853" strokeWidth="1.3"/><path d="M4 6l1.5 1.5L8 4.5" stroke="#34A853" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Google Connected
+              </button>
+            : <button onClick={connectGcal} disabled={gcalLoading}
+                style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'20px',border:`1.5px solid ${C.border}`,background:C.card,color:C.textPrimary,fontFamily:FONT,...T.bodySm,fontWeight:600,cursor:gcalLoading?'wait':'pointer',transition:'all 0.15s'}}
+                onMouseEnter={e=>{e.currentTarget.style.background=C.lavVeil;e.currentTarget.style.borderColor=C.brightLav}}
+                onMouseLeave={e=>{e.currentTarget.style.background=C.card;e.currentTarget.style.borderColor=C.border}}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="8" rx="1.5" stroke="#4285F4" strokeWidth="1.2"/><path d="M1 4.5h10" stroke="#4285F4" strokeWidth="1.2"/><circle cx="4" cy="7" r="0.8" fill="#EA4335"/><circle cx="6" cy="7" r="0.8" fill="#34A853"/><circle cx="8" cy="7" r="0.8" fill="#FBBC05"/></svg>
+                {gcalLoading ? 'Connecting...' : 'Connect Google'}
+              </button>
+        )}
         <div style={{display:'flex',gap:'8px',marginLeft:'auto'}}>
           {PEOPLE.map(p=>{
             const on=visible.includes(p.key)
