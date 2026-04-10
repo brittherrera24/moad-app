@@ -158,6 +158,9 @@ function App() {
     let cancelled = false
     gcal.init().then(ok => {
       if (!cancelled) setGcalStatus(ok ? 'connected' : 'disconnected')
+    }).catch(err => {
+      console.warn('Google Calendar init failed:', err)
+      if (!cancelled) setGcalStatus('disconnected')
     })
     return () => { cancelled = true }
   }, [])
