@@ -833,7 +833,7 @@ export default function Tasks({ taskData, setTaskData }) {
     const rec = new SR()
     rec.lang = 'en-US'
     rec.interimResults = true
-    rec.continuous = false
+    rec.continuous = true
     rec.onstart = () => setDictating(true)
     rec.onresult = e => {
       const transcript = Array.from(e.results).map(r=>r[0].transcript).join('')
@@ -860,41 +860,63 @@ export default function Tasks({ taskData, setTaskData }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 300,
-          system: `You are a task parser for Brittani, an Operations & Account Manager at NW Media Collective. Parse natural language into a task object. Return ONLY valid JSON with these fields:
-- title: string (clean task title)
-- section: one of "today" | "week" | "nextweek" | "backlog" | "waiting" | "delegate"
+          max_tokens: 1200,
+          system: `You are a task parser for Brittani, an Operations & Account Manager at NW Media Collective.
+The input may be a single task, multiple tasks listed together, or raw dev/project notes to convert into tasks.
+Parse everything into actionable tasks. Return ONLY a valid JSON array of task objects — always an array, even for one task.
+Each object must have exactly these fields:
+- title: string (clean, specific, actionable task title)
+- section: "today" | "week" | "nextweek" | "backlog" | "waiting" | "delegate"
 - category: "work" | "personal"
-- type: "client" | "internal" (only if work)
+- type: "client" | "internal" (only if work; omit or use "" if personal)
 - client: string or "" (client name if mentioned)
-- subTag: one of "Finance"|"Household"|"Cars"|"Kids"|"Family"|"Hobbies"|"Travel"|"Miscellaneous"|"" (only if personal)
-- est: one of "15m"|"30m"|"45m"|"1h"|"2h"|"3h+"|""
+- subTag: "Finance"|"Household"|"Cars"|"Kids"|"Family"|"Hobbies"|"Travel"|"Miscellaneous"|"" (only if personal)
+- est: "15m"|"30m"|"45m"|"1h"|"2h"|"3h+"|""
 - due: "YYYY-MM-DD" or ""
 - recur: "daily"|"weekly"|""
-No markdown, no explanation, just JSON.`,
+No markdown, no explanation — just a JSON array.`,
           messages: [{ role: 'user', content: quickInput }]
         })
       })
       const d = await res.json()
-      const text = d.content?.[0]?.text || '{}'
+      const text = d.content?.[0]?.text || '[]'
       const clean = text.replace(/```json|```/g, '').trim()
-      setQuickPreview(JSON.parse(clean))
+      const parsed = JSON.parse(clean)
+      // Normalise: always work with an array
+      setQuickPreview(Array.isArray(parsed) ? parsed : [parsed])
     } catch {
-      setQuickPreview({ title: quickInput.trim(), section: 'today', category: 'work', type: 'internal', client: '', est: '', due: '', recur: '' })
+      setQuickPreview([{ title: quickInput.trim(), section: 'today', category: 'work', type: 'internal', client: '', est: '', due: '', recur: '' }])
     }
     setQuickLoading(false)
+    setQuickAddOpen(false)  // close modal so preview list is visible and clickable
   }
 
   const idCounterRef = useRef(0)
   function nextId() { idCounterRef.current += 1; return idCounterRef.current + 9000000 }
 
-  function confirmQuickAdd() {
+  // Add a single task from the preview list by index
+  function confirmOneQuickAdd(idx) {
     if (!quickPreview) return
-    const { section, ...task } = quickPreview
+    const { section, ...task } = quickPreview[idx]
     addTask(section || 'today', { ...task, id: nextId() })
-    setQuickInput('')
+    const remaining = quickPreview.filter((_, i) => i !== idx)
+    if (remaining.length === 0) { setQuickPreview(null); setQuickInput('') }
+    else setQuickPreview(remaining)
+  }
+
+  // Add all remaining tasks in the preview list
+  function confirmAllQuickAdd(e) {
+    if (!quickPreview) return
+    quickPreview.forEach(({ section, ...task }) => addTask(section || 'today', { ...task, id: nextId() }))
+    fireConfetti(e?.clientX || window.innerWidth / 2, e?.clientY || 200)
     setQuickPreview(null)
-    setQuickAddOpen(false)
+    setQuickInput('')
+  }
+
+  // Legacy single-add (kept for Escape/keyboard flow)
+  function confirmQuickAdd() {
+    if (!quickPreview?.length) return
+    confirmAllQuickAdd()
   }
 
   function fireConfetti(x, y) {
@@ -1315,18 +1337,18 @@ No markdown, no explanation, just JSON.`,
           {/* AI Quick Add floating input popup */}
           {quickAddOpen && (
             <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(45,32,74,0.35)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center' }}
-              onClick={e=>{ if(e.target===e.currentTarget){ setQuickAddOpen(false); setQuickInput(''); setQuickPreview(null); recognitionRef.current?.stop() } }}
+              onClick={e=>{ if(e.target===e.currentTarget){ setQuickAddOpen(false); recognitionRef.current?.stop() } }}
             >
               <div style={{ background:'linear-gradient(135deg,#FEDBA9 0%,#FEA877 40%,#FF7776 100%)', borderRadius:'16px', padding:'20px', display:'flex', flexDirection:'column', gap:'10px', boxShadow:'0 24px 64px rgba(255,119,118,0.35)', width:'360px', maxWidth:'90vw', animation:'popup-in 0.18s ease' }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <span style={{ fontSize:'13px', fontWeight:800, color:'#FFFFFF', fontFamily:FONT }}>AI Quick Add</span>
-                  <button onClick={()=>{ setQuickAddOpen(false); setQuickInput(''); setQuickPreview(null); recognitionRef.current?.stop() }}
+                  <button onClick={()=>{ setQuickAddOpen(false); recognitionRef.current?.stop() }}
                     style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'#fff', cursor:'pointer', fontSize:'14px', borderRadius:'6px', width:'24px', height:'24px', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT }}>×</button>
                 </div>
                 <input ref={quickInputRef} value={quickInput}
                   onChange={e=>{ setQuickInput(e.target.value); setQuickPreview(null) }}
-                  onKeyDown={e=>{ if(e.key==='Enter') runQuickAdd(); if(e.key==='Escape'){ setQuickAddOpen(false); setQuickInput(''); setQuickPreview(null); recognitionRef.current?.stop() } }}
-                  placeholder={dictating ? 'Listening...' : 'Describe your task naturally...'}
+                  onKeyDown={e=>{ if(e.key==='Enter') runQuickAdd(); if(e.key==='Escape'){ setQuickAddOpen(false); recognitionRef.current?.stop() } }}
+                  placeholder={dictating ? 'Listening...' : 'One task, a list, or paste your notes...'}
                   style={{ width:'100%', padding:'10px 14px', borderRadius:'10px', border: dictating ? '1.5px solid rgba(255,255,255,0.7)' : '1.5px solid rgba(255,255,255,0.3)', background:'rgba(255,255,255,0.2)', color:'#FFFFFF', fontSize:'13px', fontFamily:FONT, outline:'none', boxSizing:'border-box' }}
                 />
                 <div style={{ display:'flex', gap:'8px' }}>
@@ -1399,23 +1421,54 @@ No markdown, no explanation, just JSON.`,
         ))}
       </div>
 
-      {/* ── AI Quick Add preview ── */}
-      {quickPreview && (
-        <div style={{ background:C.card, borderRadius:'12px', border:`1.5px solid ${C.brightLavender}`, boxShadow:C.shadowMd, padding:'12px 16px', marginBottom:'12px', display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
-          <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#A873EF', flexShrink:0 }} />
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:'13px', fontWeight:700, color:C.textPrimary, fontFamily:FONT }}>{quickPreview.title}</div>
-            <div style={{ display:'flex', gap:'5px', marginTop:'4px', flexWrap:'wrap' }}>
-              <span style={{ fontSize:'9px', fontWeight:700, padding:'2px 7px', borderRadius:'20px', background:C.lavenderVeil, color:'#A873EF', fontFamily:FONT, textTransform:'uppercase' }}>{quickPreview.section}</span>
-              {quickPreview.client && <span style={{ fontSize:'9px', fontWeight:700, padding:'2px 7px', borderRadius:'20px', background:C.lavenderVeil, color:'#A873EF', fontFamily:FONT }}>{quickPreview.client}</span>}
-              {quickPreview.subTag && <span style={{ fontSize:'9px', fontWeight:700, padding:'2px 7px', borderRadius:'20px', background:C.teaGreen, color:'#2D1F4A', fontFamily:FONT }}>{quickPreview.subTag}</span>}
-              {quickPreview.est && <span style={{ fontSize:'9px', fontWeight:600, color:C.textMuted, fontFamily:FONT }}>{quickPreview.est}</span>}
-              {quickPreview.due && <span style={{ fontSize:'9px', fontWeight:700, padding:'2px 7px', borderRadius:'20px', background:C.navajoWhite, color:'#2D1F4A', fontFamily:FONT }}>Due {quickPreview.due}</span>}
+      {/* ── AI Quick Add preview (multi-task list) ── */}
+      {quickPreview && quickPreview.length > 0 && (
+        <div style={{ background:C.card, borderRadius:'14px', border:`1.5px solid ${C.brightLavender}`, boxShadow:C.shadowMd, padding:'14px 16px', marginBottom:'12px' }}>
+          {/* Header */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'7px' }}>
+              <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#A873EF' }} />
+              <span style={{ fontSize:'11px', fontWeight:800, color:'#A873EF', fontFamily:FONT, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                {quickPreview.length === 1 ? '1 task parsed' : `${quickPreview.length} tasks parsed`}
+              </span>
+            </div>
+            <div style={{ display:'flex', gap:'6px' }}>
+              <button onClick={()=>{ setQuickPreview(null); setQuickAddOpen(true); setTimeout(()=>quickInputRef.current?.focus(),100) }}
+                style={{ padding:'5px 10px', borderRadius:'8px', border:`1px solid ${C.border}`, background:'transparent', color:C.textSecond, fontSize:'11px', fontWeight:600, fontFamily:FONT, cursor:'pointer' }}>
+                Edit input
+              </button>
+              <button onClick={confirmAllQuickAdd}
+                style={{ padding:'5px 12px', borderRadius:'8px', border:'none', background:'linear-gradient(135deg,#D39EF6,#A873EF)', color:'#fff', fontSize:'11px', fontWeight:700, fontFamily:FONT, cursor:'pointer', boxShadow:C.shadowSm }}>
+                Add all
+              </button>
             </div>
           </div>
-          <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
-            <button onClick={()=>setQuickPreview(null)} style={{ padding:'6px 12px', borderRadius:'8px', border:`1px solid ${C.border}`, background:'transparent', color:C.textSecond, fontSize:'11px', fontWeight:600, fontFamily:FONT, cursor:'pointer' }}>Edit</button>
-            <button onClick={confirmQuickAdd} style={{ padding:'6px 14px', borderRadius:'8px', border:'none', background:'linear-gradient(135deg,#D39EF6,#A873EF)', color:'#fff', fontSize:'11px', fontWeight:700, fontFamily:FONT, cursor:'pointer', boxShadow:C.shadowSm }}>Add task</button>
+          {/* Task rows */}
+          <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+            {quickPreview.map((t, idx) => (
+              <div key={idx} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 10px', borderRadius:'10px', background:C.bg }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:'13px', fontWeight:600, color:C.textPrimary, fontFamily:FONT, marginBottom:'3px' }}>{t.title}</div>
+                  <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
+                    <span style={{ fontSize:'9px', fontWeight:700, padding:'2px 6px', borderRadius:'20px', background:C.lavenderVeil, color:'#A873EF', fontFamily:FONT, textTransform:'uppercase' }}>{t.section}</span>
+                    {t.client && <span style={{ fontSize:'9px', fontWeight:700, padding:'2px 6px', borderRadius:'20px', background:C.lavenderVeil, color:'#A873EF', fontFamily:FONT }}>{t.client}</span>}
+                    {t.subTag && <span style={{ fontSize:'9px', fontWeight:700, padding:'2px 6px', borderRadius:'20px', background:'#D4F8EE', color:'#1A7A60', fontFamily:FONT }}>{t.subTag}</span>}
+                    {t.est && <span style={{ fontSize:'9px', fontWeight:600, color:C.textMuted, fontFamily:FONT }}>{t.est}</span>}
+                    {t.due && <span style={{ fontSize:'9px', fontWeight:700, padding:'2px 6px', borderRadius:'20px', background:'#FEF0DC', color:'#B85A00', fontFamily:FONT }}>Due {t.due}</span>}
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:'5px', flexShrink:0 }}>
+                  <button onClick={()=>confirmOneQuickAdd(idx)}
+                    style={{ padding:'5px 10px', borderRadius:'8px', border:'none', background:'linear-gradient(135deg,#D39EF6,#A873EF)', color:'#fff', fontSize:'11px', fontWeight:700, fontFamily:FONT, cursor:'pointer' }}>
+                    Add
+                  </button>
+                  <button onClick={()=>{ const r=quickPreview.filter((_,i)=>i!==idx); if(r.length===0){setQuickPreview(null);setQuickInput('')}else setQuickPreview(r) }}
+                    style={{ width:'26px', height:'26px', borderRadius:'6px', border:`1px solid ${C.border}`, background:'transparent', color:C.textMuted, fontSize:'14px', lineHeight:1, fontFamily:FONT, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

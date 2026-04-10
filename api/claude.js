@@ -12,7 +12,7 @@ const ALLOWED_ORIGINS = [
 ]
 
 // Cap tokens so a bug in the frontend can't run up an enormous bill
-const MAX_TOKENS_CAP = 4096
+const MAX_TOKENS_CAP = 8192
 
 export default async function handler(req, res) {
   // ── CORS headers ────────────────────────────────────────────────────────────
