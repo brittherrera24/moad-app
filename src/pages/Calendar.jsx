@@ -33,7 +33,31 @@ const PEOPLE = [
 
 // No seed events; all calendar events come from Supabase or Google Calendar
 
-const INITIAL_DINNERS = {}  // Dinner planning will be wired to Supabase later
+// Generate dinner plan for the current week (placeholder until wired to Supabase)
+function buildWeekDinners() {
+  const now = new Date()
+  const sun = new Date(now)
+  sun.setDate(now.getDate() - now.getDay())
+  const meals = [
+    { meal:'Crockpot Chili',      people:['brittani','chris','liam','ethan'] },
+    { meal:'Taco Tuesday',        people:['brittani','chris','liam','ethan'] },
+    { meal:'Pasta Night',         people:['brittani','chris','liam','ethan'] },
+    { meal:'Grilled Chicken',     people:['brittani','chris','liam'] },
+    { meal:'Pizza Friday',        people:['brittani','chris','liam','ethan'] },
+    { meal:'Burgers',             people:['brittani','chris','liam','ethan'] },
+    { meal:'Leftovers',           people:['brittani','liam'] },
+  ]
+  const dinners = {}
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(sun)
+    d.setDate(sun.getDate() + i)
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    dinners[key] = meals[i]
+  }
+  return dinners
+}
+
+const INITIAL_DINNERS = buildWeekDinners()
 
 const SUBTAG_COLORS = {
   Finance:       { bg:'#D6EEC9', color:'#2A6B40' },
@@ -341,21 +365,6 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>
           Add Event
         </button>
-        {gcalStatus === 'disconnected' && connectors?.gcal?.connect && (
-          <button onClick={connectors.gcal.connect}
-            style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'20px',border:`1.5px solid ${C.border}`,background:C.card,color:C.textPrimary,fontFamily:FONT,...T.bodySm,fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}
-            onMouseEnter={e=>{e.currentTarget.style.background=C.lavVeil;e.currentTarget.style.borderColor=C.brightLav}}
-            onMouseLeave={e=>{e.currentTarget.style.background=C.card;e.currentTarget.style.borderColor=C.border}}>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="8" rx="1.5" stroke="#4285F4" strokeWidth="1.2"/><path d="M1 4.5h10" stroke="#4285F4" strokeWidth="1.2"/><circle cx="4" cy="7" r="0.8" fill="#EA4335"/><circle cx="6" cy="7" r="0.8" fill="#34A853"/><circle cx="8" cy="7" r="0.8" fill="#FBBC05"/></svg>
-            Connect Google
-          </button>
-        )}
-        {gcalStatus === 'connected' && gcalEvents.length > 0 && (
-          <span style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'20px',border:`1.5px solid ${C.border}`,background:C.card,color:C.textSecond,fontFamily:FONT,...T.bodySm,fontWeight:600}}>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#34A853" strokeWidth="1.3"/><path d="M4 6l1.5 1.5L8 4.5" stroke="#34A853" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            Google Calendar
-          </span>
-        )}
         <div style={{display:'flex',gap:'8px',marginLeft:'auto'}}>
           {PEOPLE.map(p=>{
             const on=visible.includes(p.key)
@@ -373,8 +382,11 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
       {/* Main 3/4 + 1/4 */}
       <div style={{display:'flex',gap:'16px',alignItems:'flex-start',flex:1,minHeight:0}}>
 
+        {/* Calendar column: card + connectors */}
+        <div style={{flex:'0 0 74%',minWidth:0,display:'flex',flexDirection:'column',gap:'12px'}}>
+
         {/* Calendar card */}
-        <div style={{flex:'0 0 74%',minWidth:0,background:C.card,borderRadius:'16px',border:`1px solid ${C.border}`,boxShadow:C.shadowSm,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+        <div style={{background:C.card,borderRadius:'16px',border:`1px solid ${C.border}`,boxShadow:C.shadowSm,overflow:'hidden',display:'flex',flexDirection:'column'}}>
 
           {/* Day headers */}
           <div style={{display:'grid',gridTemplateColumns:'44px repeat(7,1fr)',borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
@@ -490,6 +502,59 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
             ))}
           </div>
         </div>
+
+        {/* Connectors bar */}
+        {connectors?.gcal && (
+          <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+            <div
+              onClick={gcalStatus === 'disconnected' && connectors.gcal.connect ? connectors.gcal.connect : undefined}
+              style={{
+                background:C.card, borderRadius:'16px', border:`1px solid ${C.border}`,
+                boxShadow:C.shadowSm, padding:'12px 16px', display:'flex', alignItems:'center', gap:'12px',
+                cursor:gcalStatus==='disconnected'?'pointer':'default', transition:'all 0.2s',
+                fontFamily:FONT, minWidth:'180px',
+              }}
+              onMouseEnter={e=>{e.currentTarget.style.boxShadow=C.shadowMd}}
+              onMouseLeave={e=>{e.currentTarget.style.boxShadow=C.shadowSm}}
+            >
+              {/* Icon square */}
+              <div style={{width:'36px',height:'36px',borderRadius:'10px',background:gcalStatus==='connected'?'#4285F4':'#E8E6ED',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                  <rect x="2" y="3" width="12" height="11" rx="2" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.4"/>
+                  <path d="M2 6.5h12" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.4"/>
+                  <circle cx="5.5" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
+                  <circle cx="8" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
+                  <circle cx="10.5" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
+                  <path d="M5 1v3M11 1v3" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+              </div>
+              {/* Label + status light */}
+              <div style={{display:'flex',flexDirection:'column',gap:'3px',minWidth:0}}>
+                <span style={{...T.bodySm,fontWeight:700,color:C.textPrimary,whiteSpace:'nowrap'}}>Google Calendar</span>
+                <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                  <div style={{
+                    width:'7px',height:'7px',borderRadius:'50%',flexShrink:0,
+                    background: gcalStatus==='connected' ? '#34A853' : gcalStatus==='loading' ? '#FBBC05' : '#FF7776',
+                    boxShadow: gcalStatus==='connected' ? '0 0 6px rgba(52,168,83,0.5)' : gcalStatus==='loading' ? '0 0 6px rgba(251,188,5,0.5)' : 'none',
+                  }}/>
+                  <span style={{...T.caption,color:C.textMuted,textTransform:'uppercase',letterSpacing:'0.04em'}}>
+                    {gcalStatus==='connected' ? `${gcalEvents.length} events` : gcalStatus==='loading' ? 'Connecting...' : 'Click to connect'}
+                  </span>
+                </div>
+              </div>
+              {/* Disconnect button when connected */}
+              {gcalStatus==='connected' && connectors.gcal.disconnect && (
+                <button
+                  onClick={e=>{e.stopPropagation();connectors.gcal.disconnect()}}
+                  style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:C.textMuted,fontSize:'14px',padding:'4px',lineHeight:1}}
+                  title="Disconnect Google Calendar"
+                >{'\u00D7'}</button>
+              )}
+            </div>
+          </div>
+        )}
+
+        </div>{/* end calendar column */}
 
         {/* Sidebar */}
         <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:'12px',alignSelf:'stretch',overflow:'hidden'}}>
