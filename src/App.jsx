@@ -14,9 +14,14 @@ import Household from './pages/Household'
 import Achievements from './pages/Achievements'
 import { INITIAL_TASK_DATA } from './taskData'
 import { loadTasks, saveTasks, loadEvents, saveEvents } from './lib/supabase'
+import * as gcal from './lib/googleCalendar'
 
 const FONT = "'Plus Jakarta Sans', -apple-system, sans-serif"
-const TODAY = '2026-04-08'
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+const TODAY = todayStr()
 
 const PEOPLE = [
   { key:'brittani', label:'Britt', color:'#A873EF', bg:'#EBDBFC', textColor:'#A873EF' },
@@ -36,6 +41,7 @@ const T = {
   label:    { fontSize:'10px', fontWeight:700 },
 }
 
+// ── ADD EVENT POPUP — lives in App so it works from any page ─────────────────
 function AddEventPopup({ onClose, onAdd }) {
   const [title,  setTitle]  = useState('')
   const [date,   setDate]   = useState(TODAY)
@@ -67,7 +73,7 @@ function AddEventPopup({ onClose, onAdd }) {
       <div style={{background:'#fff',borderRadius:'18px',padding:'28px',width:'440px',maxWidth:'92vw',display:'flex',flexDirection:'column',gap:'18px',boxShadow:'0 24px 64px rgba(45,32,74,0.28)'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <span style={{...T.heading,color:C.textPrimary}}>Add Event</span>
-          <button onClick={onClose} style={{background:'none',border:'none',fontSize:'24px',color:C.textMuted,cursor:'pointer',lineHeight:1}}>×</button>
+          <button onClick={onClose} style={{background:'none',border:'none',fontSize:'24px',color:C.textMuted,cursor:'pointer',lineHeight:1}}>{'\u00D7'}</button>
         </div>
         <input ref={inputRef} value={title} onChange={e=>setTitle(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter')submit();if(e.key==='Escape')onClose()}}
@@ -123,6 +129,11 @@ function App() {
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [dbReady,      setDbReady]      = useState(false)
 
+  // ── Google Calendar connector state (app-level) ─────────────────────────
+  const [gcalStatus, setGcalStatus] = useState(() => gcal.isConfigured() ? 'loading' : 'disconnected')
+  const [gcalEvents, setGcalEvents] = useState([])
+
+  // ── Load from Supabase on mount ──────────────────────────────────────────
   useEffect(() => {
     async function init() {
       try {
@@ -137,6 +148,81 @@ function App() {
     init()
   }, [])
 
+  // ── Google Calendar: initialize connector on mount ──────────────────────
+  useEffect(() => {
+    if (!gcal.isConfigured()) return
+    let cancelled = false
+    gcal.init().then(ok => {
+      if (!cancelled) setGcalStatus(ok ? 'connected' : 'disconnected')
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  // ── Google Calendar: fetch events whenever status is connected ──────────
+  // Re-fetches can be triggered by calling refreshGcalEvents()
+  const gcalFetchId = useRef(0)
+
+  // Fetch gcal events when status becomes connected
+  useEffect(() => {
+    if (gcalStatus !== 'connected') return
+    let cancelled = false
+
+    async function fetchGcal() {
+      const id = ++gcalFetchId.current
+      const now = new Date()
+      const timeMin = new Date(now)
+      timeMin.setDate(now.getDate() - 14)
+      const timeMax = new Date(now)
+      timeMax.setDate(now.getDate() + 28)
+
+      try {
+        const fetched = await gcal.fetchEvents(timeMin, timeMax)
+        if (!cancelled && id === gcalFetchId.current) {
+          setGcalEvents(fetched)
+        }
+      } catch (err) {
+        console.error('Google Calendar fetch error:', err)
+      }
+    }
+
+    fetchGcal()
+    return () => { cancelled = true }
+  }, [gcalStatus])
+
+  // Refresh function for manual re-fetch (e.g., from a refresh button)
+  async function refreshGcalEvents() {
+    if (gcalStatus !== 'connected') return
+    const id = ++gcalFetchId.current
+    const now = new Date()
+    const timeMin = new Date(now)
+    timeMin.setDate(now.getDate() - 14)
+    const timeMax = new Date(now)
+    timeMax.setDate(now.getDate() + 28)
+    try {
+      const fetched = await gcal.fetchEvents(timeMin, timeMax)
+      if (id === gcalFetchId.current) setGcalEvents(fetched)
+    } catch (err) {
+      console.error('Google Calendar fetch error:', err)
+    }
+  }
+
+  // Called from Connect button (first time only; user gesture required)
+  async function connectGcal() {
+    try {
+      await gcal.connect()
+      setGcalStatus('connected')
+    } catch (err) {
+      console.warn('Google Calendar: connect failed or declined', err)
+    }
+  }
+
+  async function disconnectGcal() {
+    await gcal.disconnect()
+    setGcalStatus('disconnected')
+    setGcalEvents([])
+  }
+
+  // ── Sync tasks to Supabase on change (after initial load) ────────────────
   const taskSaveTimer = useRef(null)
   useEffect(() => {
     if (!dbReady) return
@@ -147,6 +233,7 @@ function App() {
     return () => clearTimeout(taskSaveTimer.current)
   }, [taskData, dbReady])
 
+  // ── Sync events to Supabase on change (after initial load) ───────────────
   const eventSaveTimer = useRef(null)
   useEffect(() => {
     if (!dbReady) return
@@ -166,6 +253,17 @@ function App() {
     setEvents(prev=>prev.map(e=>e.id===updated.id?updated:e))
   }
 
+  // Connectors object for any page that needs it (Home, Calendar, future settings)
+  const connectors = {
+    gcal: {
+      status: gcalStatus,
+      events: gcalEvents,
+      connect: connectGcal,
+      disconnect: disconnectGcal,
+      refresh: refreshGcalEvents,
+    },
+  }
+
   return (
     <BrowserRouter>
       <div style={{display:'flex',height:'100vh',overflow:'hidden',background:'var(--surface-bg)',fontFamily:'var(--font-sans)'}}>
@@ -174,9 +272,9 @@ function App() {
           <Header onAddCalendarEvent={()=>setShowAddEvent(true)} />
           <main style={{flex:1,overflowY:'auto'}}>
             <Routes>
-              <Route path="/"             element={<Home         taskData={taskData} />} />
+              <Route path="/"             element={<Home         taskData={taskData} connectors={connectors} />} />
               <Route path="/tasks"        element={<Tasks        taskData={taskData} setTaskData={setTaskData} />} />
-              <Route path="/calendar"     element={<Calendar     taskData={taskData} setTaskData={setTaskData} customEvents={events} setCustomEvents={setEvents} onAddEvent={()=>setShowAddEvent(true)} onDeleteEvent={deleteEvent} onUpdateEvent={updateEvent} />} />
+              <Route path="/calendar"     element={<Calendar     taskData={taskData} setTaskData={setTaskData} customEvents={events} onAddEvent={()=>setShowAddEvent(true)} onDeleteEvent={deleteEvent} onUpdateEvent={updateEvent} connectors={connectors} />} />
               <Route path="/health"       element={<Health />} />
               <Route path="/fitness"      element={<Fitness />} />
               <Route path="/meals"        element={<Meals />} />
@@ -189,6 +287,7 @@ function App() {
         </div>
       </div>
 
+      {/* Global popups */}
       {showAddEvent && (
         <AddEventPopup
           onClose={()=>setShowAddEvent(false)}

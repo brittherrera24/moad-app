@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import * as gcal from '../lib/googleCalendar'
 import { useNavigate } from 'react-router-dom'
-import { INITIAL_TASK_DATA } from '../taskData'
 
 const FONT = "'Plus Jakarta Sans', -apple-system, sans-serif"
 
-// ── TYPE SCALE (from style guide) ────────────────────────────────────────────
 const T = {
   hero:      { fontSize:'28px', fontWeight:800 },
   heading:   { fontSize:'20px', fontWeight:800 },
@@ -78,20 +75,29 @@ const SUBTAG_COLORS = {
 
 const HOURS  = Array.from({ length:17 }, (_,i) => i+6)
 const HOUR_H = 34
-const TODAY  = '2026-04-08'
 
+// ── Date helpers (all dynamic, no hardcoded dates) ───────────────────────────
 function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
+
+const TODAY = dateKey(new Date())
+
 function fmtHour(h) {
   if (h===12) return '12pm'
   if (h===0||h===24) return '12am'
   return h<12 ? `${h}am` : `${h-12}pm`
 }
+
 function getWeekDates(offset=0) {
-  const base=new Date(2026,3,8), sun=new Date(base)
-  sun.setDate(base.getDate()-base.getDay()+offset*7)
-  return Array.from({length:7},(_,i)=>{ const d=new Date(sun); d.setDate(sun.getDate()+i); return d })
+  const now = new Date()
+  const sun = new Date(now)
+  sun.setDate(now.getDate() - now.getDay() + offset * 7)
+  return Array.from({length:7}, (_, i) => {
+    const d = new Date(sun)
+    d.setDate(sun.getDate() + i)
+    return d
+  })
 }
 
 function layoutEvents(events) {
@@ -124,18 +130,24 @@ function getTagStyle(t) {
   return {bg:'#D6EEC9',color:'#2A6B40',label:'Personal'}
 }
 
+// ── Now line for time indicator ──────────────────────────────────────────────
+function getNowHour() {
+  const n = new Date()
+  return n.getHours() + n.getMinutes() / 60
+}
+
 // ── MINI MONTH ───────────────────────────────────────────────────────────────
 function MiniMonth({ selectedDate, onSelect }) {
-  const [view, setView] = useState(new Date(2026,3,1))
-  const today=new Date(2026,3,8)
+  const today = new Date()
+  const [view, setView] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const yr=view.getFullYear(), mo=view.getMonth()
   const cells=[...Array(new Date(yr,mo,1).getDay()).fill(null),...Array.from({length:new Date(yr,mo+1,0).getDate()},(_,i)=>i+1)]
   return (
     <div style={{background:C.card,borderRadius:'14px',border:`1px solid ${C.border}`,boxShadow:C.shadowSm,padding:'16px',fontFamily:FONT,flexShrink:0}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
-        <button onClick={()=>setView(new Date(yr,mo-1,1))} style={{background:'none',border:'none',cursor:'pointer',color:C.textSecond,fontSize:'18px',padding:'2px 6px',lineHeight:1}}>‹</button>
+        <button onClick={()=>setView(new Date(yr,mo-1,1))} style={{background:'none',border:'none',cursor:'pointer',color:C.textSecond,fontSize:'18px',padding:'2px 6px',lineHeight:1}}>{'\u2039'}</button>
         <span style={{...T.caption,color:C.textPrimary}}>{view.toLocaleDateString('en-US',{month:'long',year:'numeric'})}</span>
-        <button onClick={()=>setView(new Date(yr,mo+1,1))} style={{background:'none',border:'none',cursor:'pointer',color:C.textSecond,fontSize:'18px',padding:'2px 6px',lineHeight:1}}>›</button>
+        <button onClick={()=>setView(new Date(yr,mo+1,1))} style={{background:'none',border:'none',cursor:'pointer',color:C.textSecond,fontSize:'18px',padding:'2px 6px',lineHeight:1}}>{'\u203A'}</button>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:'4px'}}>
         {['S','M','T','W','T','F','S'].map((d,i)=>(
@@ -165,58 +177,27 @@ function MiniMonth({ selectedDate, onSelect }) {
 }
 
 // ── MAIN ─────────────────────────────────────────────────────────────────────
-export default function Calendar({ taskData, setTaskData, customEvents, setCustomEvents, onAddEvent, onDeleteEvent, onUpdateEvent }) {  const navigate=useNavigate()
+export default function Calendar({ taskData, setTaskData, customEvents, onAddEvent, onDeleteEvent, onUpdateEvent, connectors }) {
+  const navigate=useNavigate()
   const [weekOffset,   setWeekOffset]   = useState(0)
   const [visible,      setVisible]      = useState(['brittani','chris','liam','ethan'])
   const [dinnerHome,   setDinnerHome]   = useState(INITIAL_DINNERS)
-  const [selectedDate, setSelectedDate] = useState(new Date(2026,3,8))
-  const [selectedEvent, setSelectedEvent] = useState(null) // for edit/delete popup
-  const [editingEvent,  setEditingEvent]  = useState(null) // for edit form
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [selectedEvent, setSelectedEvent] = useState(null)
+  const [editingEvent,  setEditingEvent]  = useState(null)
   const gridRef=useRef()
-  const [gcalEvents,    setGcalEvents]    = useState([])
-  const [gcalConnected, setGcalConnected] = useState(false)
-  const [gcalLoading,   setGcalLoading]   = useState(false)
 
-  const fetchGcalEvents = useCallback(async () => {
-    if (!gcal.hasToken()) return
-    const dts = getWeekDates(weekOffset)
-    const timeMin = new Date(dts[0])
-    const timeMax = new Date(dts[6])
-    timeMax.setDate(timeMax.getDate() + 1)
-    try {
-      const events = await gcal.fetchEvents(timeMin, timeMax)
-      setGcalEvents(events)
-    } catch (err) {
-      console.error('Google Calendar fetch error:', err)
-    }
-  }, [weekOffset])
-
-  async function connectGcal() {
-    if (!gcal.isConfigured()) return
-    setGcalLoading(true)
-    try {
-      await gcal.requestAccessToken()
-      setGcalConnected(true)
-      await fetchGcalEvents()
-    } catch (err) {
-      console.error('Google Calendar connect error:', err)
-    }
-    setGcalLoading(false)
-  }
-
-  function disconnectGcal() {
-    gcal.disconnect()
-    setGcalConnected(false)
-    setGcalEvents([])
-  }
-
-  useEffect(() => {
-    if (gcalConnected) fetchGcalEvents()
-  }, [weekOffset, gcalConnected, fetchGcalEvents])
+  // Google Calendar events come from App.jsx via connectors prop
+  const gcalStatus = connectors?.gcal?.status || 'disconnected'
+  const gcalEvents = connectors?.gcal?.events || []
 
   useEffect(()=>{
-    if(gridRef.current) gridRef.current.scrollTop=(8-6)*HOUR_H-4
+    if(gridRef.current) {
+      const nowH = getNowHour()
+      gridRef.current.scrollTop = (nowH - 6) * HOUR_H - 4
+    }
   },[])
+
   const togglePerson=useCallback(key=>{
     setVisible(prev=>prev.includes(key)?(prev.length>1?prev.filter(k=>k!==key):prev):[...prev,key])
   },[])
@@ -229,7 +210,6 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
     })
   },[])
 
-  // Completes task in shared App state — both Calendar and Tasks page reflect instantly
   function completeTask(taskId) {
     if(!setTaskData) return
     setTaskData(prev=>{
@@ -245,7 +225,6 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
 
   function openAdd() { if(onAddEvent) onAddEvent() }
 
-  // Local overrides for seed events that get edited
   const [seedOverrides, setSeedOverrides] = useState({})
 
   function saveEdit(ev) {
@@ -274,11 +253,11 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
     ...SEED_EVENTS
       .filter(e=>seedOverrides[e.id]!=='deleted')
       .map(e=>seedOverrides[e.id]||e),
-    ...(customEvents||[])
+    ...(customEvents||[]),
+    ...gcalEvents,
   ]
-  const nowTop=(14.3-6)*HOUR_H
+  const nowTop=(getNowHour()-6)*HOUR_H
 
-  // Use shared taskData directly — no fallback that could cause stale data
   const todayTasks=taskData?.today ?? []
   const sortedTasks=[
     ...todayTasks.filter(t=>t.category==='personal'),
@@ -292,13 +271,12 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
   return (
     <div style={{fontFamily:FONT,background:C.bg,height:'100vh',padding:'20px 24px',display:'flex',flexDirection:'column',gap:'14px',boxSizing:'border-box',overflow:'hidden'}}>
 
-      {/* Event detail popup — edit / delete */}
+      {/* Event detail popup */}
       {selectedEvent&&!editingEvent&&(
         <div onClick={()=>setSelectedEvent(null)}
           style={{position:'fixed',inset:0,background:'rgba(45,32,74,0.25)',zIndex:500,display:'flex',alignItems:'center',justifyContent:'center'}}>
           <div onClick={e=>e.stopPropagation()}
             style={{background:'#fff',borderRadius:'20px',padding:'0',width:'340px',boxShadow:'0 20px 60px rgba(45,32,74,0.22)',fontFamily:FONT,overflow:'hidden',border:`1px solid ${C.border}`}}>
-            {/* Color header strip */}
             <div style={{background:PEOPLE.find(p=>p.key===selectedEvent.person)?.bg||C.lavVeil,padding:'20px 20px 16px',borderBottom:`1px solid ${C.border}`}}>
               <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
                 <div>
@@ -306,18 +284,17 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
                   <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                     <div style={{width:'8px',height:'8px',borderRadius:'50%',background:PEOPLE.find(p=>p.key===selectedEvent.person)?.color||C.brightLav}}/>
                     <span style={{...T.caption,color:C.textSecond}}>{PEOPLE.find(p=>p.key===selectedEvent.person)?.label}</span>
-                    <span style={{...T.caption,color:C.textMuted}}>·</span>
+                    <span style={{...T.caption,color:C.textMuted}}>{'\u00B7'}</span>
                     <span style={{...T.caption,color:C.textSecond}}>{selectedEvent.date}</span>
                   </div>
                   <div style={{marginTop:'6px',display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(255,255,255,0.6)',borderRadius:'20px',padding:'4px 10px'}}>
                     <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="4.5" stroke="#9793A0" strokeWidth="1.2"/><path d="M5.5 3v2.5l1.5 1.5" stroke="#9793A0" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                    <span style={{...T.caption,color:C.textSecond,fontWeight:600}}>{fmtHour(selectedEvent.start)} – {fmtHour(selectedEvent.end)}</span>
+                    <span style={{...T.caption,color:C.textSecond,fontWeight:600}}>{fmtHour(selectedEvent.start)} {'\u2013'} {fmtHour(selectedEvent.end)}</span>
                   </div>
                 </div>
-                <button onClick={()=>setSelectedEvent(null)} style={{background:'rgba(255,255,255,0.6)',border:'none',borderRadius:'50%',width:'28px',height:'28px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:C.textMuted,fontSize:'16px',lineHeight:1,flexShrink:0}}>×</button>
+                <button onClick={()=>setSelectedEvent(null)} style={{background:'rgba(255,255,255,0.6)',border:'none',borderRadius:'50%',width:'28px',height:'28px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:C.textMuted,fontSize:'16px',lineHeight:1,flexShrink:0}}>{'\u00D7'}</button>
               </div>
             </div>
-            {/* Actions */}
             <div style={{padding:'14px 16px',display:'flex',gap:'8px'}}>
               <button onClick={()=>setEditingEvent({...selectedEvent})}
                 style={{flex:1,padding:'10px 14px',borderRadius:'10px',border:`1.5px solid ${C.border}`,background:C.bg,color:C.textPrimary,fontFamily:FONT,...T.bodySm,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',transition:'all 0.15s'}}
@@ -346,7 +323,7 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
             style={{background:'#fff',borderRadius:'18px',padding:'24px',width:'420px',maxWidth:'92vw',display:'flex',flexDirection:'column',gap:'14px',boxShadow:'0 24px 64px rgba(45,32,74,0.25)',fontFamily:FONT}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
               <span style={{...T.heading,color:C.textPrimary}}>Edit Event</span>
-              <button onClick={()=>setEditingEvent(null)} style={{background:'none',border:'none',fontSize:'22px',color:C.textMuted,cursor:'pointer'}}>×</button>
+              <button onClick={()=>setEditingEvent(null)} style={{background:'none',border:'none',fontSize:'22px',color:C.textMuted,cursor:'pointer'}}>{'\u00D7'}</button>
             </div>
             <input value={editingEvent.title} onChange={e=>setEditingEvent(ev=>({...ev,title:e.target.value}))}
               style={{width:'100%',padding:'11px 14px',borderRadius:'10px',border:`1.5px solid ${C.border}`,fontFamily:FONT,color:C.textPrimary,outline:'none',boxSizing:'border-box',...T.bodyMd}}
@@ -394,20 +371,35 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
           style={{padding:'8px 18px',borderRadius:'20px',border:'none',background:weekOffset===0?C.brightLav:C.card,color:weekOffset===0?'#fff':C.textSecond,fontFamily:FONT,...T.bodySm,fontWeight:700,cursor:'pointer',boxShadow:C.shadowSm}}>
           Today
         </button>
-        {[[-1,'‹'],[1,'›']].map(([d,lbl])=>(
+        {[[-1,'\u2039'],[1,'\u203A']].map(([d,lbl])=>(
           <button key={d} onClick={()=>setWeekOffset(w=>w+d)}
             style={{width:'34px',height:'34px',borderRadius:'50%',border:`1px solid ${C.border}`,background:C.card,cursor:'pointer',fontSize:'16px',color:C.textSecond,display:'flex',alignItems:'center',justifyContent:'center'}}
             onMouseEnter={e=>e.currentTarget.style.background=C.lavVeil}
             onMouseLeave={e=>e.currentTarget.style.background=C.card}>{lbl}</button>
         ))}
         <span style={{...T.headingSm,color:C.textPrimary}}>
-          {weekDates[0].toLocaleDateString('en-US',{month:'long',day:'numeric'})} – {weekDates[6].toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}
+          {weekDates[0].toLocaleDateString('en-US',{month:'long',day:'numeric'})} {'\u2013'} {weekDates[6].toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}
         </span>
         <button onClick={openAdd}
           style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 16px',borderRadius:'20px',border:'none',background:'linear-gradient(135deg,#FF7776,#FEA877)',color:'#fff',fontFamily:FONT,...T.bodySm,fontWeight:700,cursor:'pointer',boxShadow:'0 2px 8px rgba(255,119,118,0.35)'}}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>
           Add Event
         </button>
+        {gcalStatus === 'disconnected' && connectors?.gcal?.connect && (
+          <button onClick={connectors.gcal.connect}
+            style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'20px',border:`1.5px solid ${C.border}`,background:C.card,color:C.textPrimary,fontFamily:FONT,...T.bodySm,fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}
+            onMouseEnter={e=>{e.currentTarget.style.background=C.lavVeil;e.currentTarget.style.borderColor=C.brightLav}}
+            onMouseLeave={e=>{e.currentTarget.style.background=C.card;e.currentTarget.style.borderColor=C.border}}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="8" rx="1.5" stroke="#4285F4" strokeWidth="1.2"/><path d="M1 4.5h10" stroke="#4285F4" strokeWidth="1.2"/><circle cx="4" cy="7" r="0.8" fill="#EA4335"/><circle cx="6" cy="7" r="0.8" fill="#34A853"/><circle cx="8" cy="7" r="0.8" fill="#FBBC05"/></svg>
+            Connect Google
+          </button>
+        )}
+        {gcalStatus === 'connected' && gcalEvents.length > 0 && (
+          <span style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 14px',borderRadius:'20px',border:`1.5px solid ${C.border}`,background:C.card,color:C.textSecond,fontFamily:FONT,...T.bodySm,fontWeight:600}}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#34A853" strokeWidth="1.3"/><path d="M4 6l1.5 1.5L8 4.5" stroke="#34A853" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Google Calendar
+          </span>
+        )}
         <div style={{display:'flex',gap:'8px',marginLeft:'auto'}}>
           {PEOPLE.map(p=>{
             const on=visible.includes(p.key)
@@ -422,10 +414,10 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
         </div>
       </div>
 
-      {/* Main 3/4 + 1/4 — align tops, tasks panel height matches calendar */}
+      {/* Main 3/4 + 1/4 */}
       <div style={{display:'flex',gap:'16px',alignItems:'flex-start',flex:1,minHeight:0}}>
 
-        {/* Calendar card — 3/4, natural height */}
+        {/* Calendar card */}
         <div style={{flex:'0 0 74%',minWidth:0,background:C.card,borderRadius:'16px',border:`1px solid ${C.border}`,boxShadow:C.shadowSm,overflow:'hidden',display:'flex',flexDirection:'column'}}>
 
           {/* Day headers */}
@@ -451,7 +443,7 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
             })}
           </div>
 
-          {/* Time grid — capped so dinner strip always visible */}
+          {/* Time grid */}
           <div ref={gridRef} style={{overflowY:'auto',maxHeight:`${HOUR_H*13}px`}}>
             <div style={{display:'grid',gridTemplateColumns:'44px repeat(7,1fr)'}}>
               <div style={{borderRight:`1px solid ${C.border}`}}>
@@ -483,7 +475,7 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
                             onClick={e=>{ e.stopPropagation(); setSelectedEvent(ev) }}
                             style={{position:'absolute',top:`${top}px`,left:`calc(${colIdx*w}% + 2px)`,width:`calc(${w}% - 4px)`,height:`${height}px`,background:p?.bg||'#EBDBFC',borderRadius:'6px',padding:'3px 6px',overflow:'hidden',cursor:'pointer',pointerEvents:'all',boxSizing:'border-box'}}>
                             <div style={{...T.caption,color:p?.textColor||C.brightLav,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.3}}>{ev.title}</div>
-                            {height>32&&<div style={{...T.micro,color:p?.textColor,opacity:0.75,marginTop:'1px'}}>{fmtHour(ev.start)}–{fmtHour(ev.end)}</div>}
+                            {height>32&&<div style={{...T.micro,color:p?.textColor,opacity:0.75,marginTop:'1px'}}>{fmtHour(ev.start)}{'\u2013'}{fmtHour(ev.end)}</div>}
                           </div>
                         )
                       })}
@@ -500,7 +492,7 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
             </div>
           </div>
 
-          {/* Dinner strip — grid must match day header exactly */}
+          {/* Dinner strip */}
           <div style={{display:'grid',gridTemplateColumns:'44px repeat(7,1fr)',borderTop:`1px solid ${C.border}`,flexShrink:0}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',borderRight:`1px solid ${C.border}`,padding:'10px 4px'}}>
               <span style={{...T.micro,color:C.textMuted,writingMode:'vertical-rl',transform:'rotate(180deg)'}}>Dinner</span>
@@ -524,7 +516,7 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
                           })}
                         </div>
                       </div>
-                    :<span style={{display:'block',textAlign:'center',...T.bodySm,color:C.textMuted,paddingTop:'8px'}}>–</span>
+                    :<span style={{display:'block',textAlign:'center',...T.bodySm,color:C.textMuted,paddingTop:'8px'}}>{'\u2013'}</span>
                   }
                 </div>
               )
@@ -543,31 +535,28 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
           </div>
         </div>
 
-        {/* Sidebar — matches calendar height via alignSelf stretch */}
+        {/* Sidebar */}
         <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:'12px',alignSelf:'stretch',overflow:'hidden'}}>
 
           <MiniMonth selectedDate={selectedDate} onSelect={d=>setSelectedDate(d)}/>
 
-          {/* Today's Tasks — fills remaining sidebar height, scrollable inside */}
+          {/* Today's Tasks */}
           <div style={{background:C.card,borderRadius:'14px',border:`1px solid ${C.border}`,boxShadow:C.shadowSm,display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden'}}>
             <div style={{padding:'14px 16px 12px',borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
               <span style={{...T.headingSm,color:C.textPrimary}}>Today's Tasks</span>
-              <button onClick={()=>navigate('/tasks')} style={{...T.caption,color:C.brightLav,background:'none',border:'none',cursor:'pointer',fontFamily:FONT,fontWeight:700}}>All →</button>
+              <button onClick={()=>navigate('/tasks')} style={{...T.caption,color:C.brightLav,background:'none',border:'none',cursor:'pointer',fontFamily:FONT,fontWeight:700}}>All {'\u2192'}</button>
             </div>
             <div style={{overflowY:'auto',flex:1}}>
               {agendaItems.length===0
-                ?<div style={{padding:'20px',textAlign:'center',...T.bodySm,color:C.textMuted,fontStyle:'italic'}}>All done! 🎉</div>
+                ?<div style={{padding:'20px',textAlign:'center',...T.bodySm,color:C.textMuted,fontStyle:'italic'}}>All done!</div>
                 :agendaItems.map((item,i)=>(
                   <div key={item.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 14px',borderBottom:i<agendaItems.length-1?`1px solid ${C.border}`:'none'}}>
-                    {/* Checkbox */}
                     <div onClick={()=>completeTask(item.id)}
                       style={{width:'16px',height:'16px',borderRadius:'4px',border:`1.5px solid ${C.border}`,flexShrink:0,cursor:'pointer',transition:'all 0.15s',background:'transparent'}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor=C.brightLav;e.currentTarget.style.background=C.lavVeil}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background='transparent'}}
                     />
-                    {/* Title */}
                     <div style={{flex:1,minWidth:0,...T.bodySm,fontWeight:600,color:C.textPrimary,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.title}</div>
-                    {/* Tag + time */}
                     <div style={{display:'flex',alignItems:'center',gap:'5px',flexShrink:0}}>
                       <span style={{...T.label,color:item.tagColor,background:item.tagBg,borderRadius:'8px',padding:'2px 8px',whiteSpace:'nowrap'}}>{item.tagLabel}</span>
                       {item.est&&<span style={{...T.label,color:C.textMuted,whiteSpace:'nowrap'}}>{item.est}</span>}
@@ -584,9 +573,9 @@ export default function Calendar({ taskData, setTaskData, customEvents, setCusto
               <span style={{...T.headingSm,color:C.textPrimary}}>Upcoming</span>
             </div>
             {[
-              {date:'Apr 10',title:'Date Night',         color:'#A873EF',bg:'#EBDBFC'},
-              {date:'Apr 15',title:'Spring Break — Liam',color:'#1A7A60',bg:'#D4F8EE'},
-              {date:'May 15',title:"Mom's 60th Birthday",color:'#FF7776',bg:'#FFE8E8'},
+              {date:'Apr 10',title:'Date Night',                color:'#A873EF',bg:'#EBDBFC'},
+              {date:'Apr 15',title:'Spring Break \u2014 Liam',  color:'#1A7A60',bg:'#D4F8EE'},
+              {date:'May 15',title:"Mom's 60th Birthday",       color:'#FF7776',bg:'#FFE8E8'},
             ].map((ev,i,arr)=>(
               <div key={i} style={{display:'flex',gap:'12px',alignItems:'center',padding:'10px 16px',borderBottom:i<arr.length-1?`1px solid ${C.border}`:'none'}}>
                 <div style={{flexShrink:0,background:ev.bg,borderRadius:'8px',padding:'5px 9px'}}>
