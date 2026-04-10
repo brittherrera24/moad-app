@@ -3,14 +3,16 @@ import { useNavigate } from 'react-router-dom'
 
 // Inject responsive styles once — mirrors Tasks page widget pattern
 const CAL_CSS = `
-  .cal-connectors { display: flex; gap: 8px; flex-wrap: nowrap; }
-  .cal-connector-card { flex: 1; min-width: 0; }
-  .cal-connector-num   { font-size: clamp(18px, 2vw, 28px); }
-  .cal-connector-icon  { width: clamp(22px, 2vw, 32px); height: clamp(22px, 2vw, 32px); }
-  .cal-connector-label { font-size: clamp(8px, 0.65vw, 11px); margin-top: 3px; }
-  .cal-connector-sub   { font-size: clamp(7px, 0.6vw, 10px); margin-top: 1px; }
+  .int-scroll { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; background: #FFFFFF; border-radius: 16px; border: 1px solid rgba(168,115,239,0.12); box-shadow: 0 2px 12px rgba(100,60,180,0.08); padding: 4px 8px; }
+  .int-scroll::-webkit-scrollbar { height: 0; }
+  .int-snap { scroll-snap-align: start; flex: 0 0 100px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 6px; border-radius: 10px; cursor: pointer; transition: background 0.15s; }
+  .int-snap:hover { background: #F9FAFE; }
+  .int-icon-wrap { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 2px 12px rgba(100,60,180,0.08); }
+  .int-name { font-size: 10px; font-weight: 700; color: #2D1F4A; text-align: center; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; }
+  .int-status { font-size: 9px; display: flex; align-items: center; gap: 3px; font-weight: 600; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; }
+  .int-dot { width: 6px; height: 6px; border-radius: 50%; }
   @media (max-width: 500px) {
-    .cal-connectors { display: none; }
+    .int-scroll { display: none; }
   }
 `
 if (typeof document !== 'undefined' && !document.getElementById('cal-responsive-css')) {
@@ -522,52 +524,24 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
           </div>
         </div>
 
-        {/* Connectors bar — same pattern as Tasks page widget squares */}
-        <div className="cal-connectors" style={{display:'flex',gap:'8px',flexWrap:'nowrap'}}>
-          {/* Google Calendar connector */}
-          {connectors?.gcal && (
-            <div className="cal-connector-card"
-              onClick={gcalStatus === 'disconnected' && connectors.gcal.connect ? connectors.gcal.connect : undefined}
-              style={{
-                background:C.card, borderRadius:'16px', border:`1px solid ${C.border}`,
-                boxShadow:C.shadowSm, padding:'12px', display:'flex', flexDirection:'column',
-                justifyContent:'space-between', transition:'box-shadow 0.2s',
-                cursor:gcalStatus==='disconnected'?'pointer':'default',
-                boxSizing:'border-box', overflow:'hidden', flex:1,
-                fontFamily:FONT,
-              }}
-              onMouseEnter={e=>{e.currentTarget.style.boxShadow=C.shadowMd}}
-              onMouseLeave={e=>{e.currentTarget.style.boxShadow=C.shadowSm}}
-            >
-              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
-                <div className="cal-connector-num" style={{fontWeight:800,color:gcalStatus==='connected'?'#4285F4':C.textMuted,lineHeight:1,fontFamily:FONT}}>
-                  {gcalStatus==='connected' ? gcalEvents.length : gcalStatus==='loading' ? '\u2026' : '\u2014'}
-                </div>
-                <div className="cal-connector-icon" style={{borderRadius:'8px',background:gcalStatus==='connected'?'#4285F4':'#E8E6ED',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <rect x="2" y="3" width="12" height="11" rx="2" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.4"/>
-                    <path d="M2 6.5h12" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.4"/>
-                    <circle cx="5.5" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
-                    <circle cx="8" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
-                    <circle cx="10.5" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
-                    <path d="M5 1v3M11 1v3" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.3" strokeLinecap="round"/>
-                  </svg>
-                </div>
-              </div>
-              <div>
-                <div className="cal-connector-label" style={{fontWeight:700,color:C.textMuted,fontFamily:FONT,textTransform:'uppercase',letterSpacing:'0.06em'}}>Google Cal</div>
-                <div className="cal-connector-sub" style={{fontWeight:500,color:C.textMuted,fontFamily:FONT,display:'flex',alignItems:'center',gap:'4px'}}>
-                  <div style={{
-                    width:'6px',height:'6px',borderRadius:'50%',flexShrink:0,
-                    background: gcalStatus==='connected' ? '#34A853' : gcalStatus==='loading' ? '#FBBC05' : '#FF7776',
-                    boxShadow: gcalStatus==='connected' ? '0 0 4px rgba(52,168,83,0.5)' : gcalStatus==='loading' ? '0 0 4px rgba(251,188,5,0.5)' : 'none',
-                  }}/>
-                  {gcalStatus==='connected' ? 'Connected' : gcalStatus==='loading' ? 'Connecting' : 'Tap to connect'}
-                </div>
-              </div>
+        {/* Integrations strip — matches prototype int-scroll pattern */}
+        <div className="int-scroll">
+          {/* Google Calendar */}
+          <div className="int-snap"
+            onClick={gcalStatus === 'disconnected' && connectors?.gcal?.connect ? connectors.gcal.connect : undefined}>
+            <div className="int-icon-wrap" style={{background:gcalStatus==='connected'?'#4285F4':'#D39EF6'}}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="2" y="4" width="12" height="9" rx="2" stroke={gcalStatus==='connected'?'#fff':'#EBDBFC'} strokeWidth="1.5"/>
+                <path d="M2 8h12M6 4V2M10 4V2" stroke={gcalStatus==='connected'?'#fff':'#EBDBFC'} strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
             </div>
-          )}
-          {/* Future connectors go here as siblings */}
+            <div className="int-name">Google Cal</div>
+            <div className="int-status" style={{color:gcalStatus==='connected'?C.textPrimary:gcalStatus==='loading'?'#FEA877':C.textMuted}}>
+              <div className="int-dot" style={{background:gcalStatus==='connected'?'#94F2DB':gcalStatus==='loading'?'#FEA877':'#FF7776'}}/>
+              {gcalStatus==='connected' ? 'Live' : gcalStatus==='loading' ? 'Syncing' : 'Connect'}
+            </div>
+          </div>
+          {/* Future integrations go here as siblings */}
         </div>
 
         </div>{/* end calendar column */}
