@@ -12,7 +12,11 @@ import Finance from './pages/Finance'
 import Knitting from './pages/Knitting'
 import Household from './pages/Household'
 import Achievements from './pages/Achievements'
-import { INITIAL_TASK_DATA } from './taskData'
+// Empty task structure; real data loads from Supabase on mount
+const EMPTY_TASKS = {
+  today: [], week: [], nextweek: [], backlog: [],
+  waiting: [], delegate: [], completed: [],
+}
 import { loadTasks, saveTasks, loadEvents, saveEvents } from './lib/supabase'
 import * as gcal from './lib/googleCalendar'
 
@@ -124,7 +128,7 @@ function AddEventPopup({ onClose, onAdd }) {
 }
 
 function App() {
-  const [taskData,     setTaskData]     = useState(INITIAL_TASK_DATA)
+  const [taskData,     setTaskData]     = useState(EMPTY_TASKS)
   const [events,       setEvents]       = useState([])
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [dbReady,      setDbReady]      = useState(false)
