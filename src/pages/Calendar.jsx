@@ -31,36 +31,9 @@ const PEOPLE = [
   { key:'ethan',    label:'Ethan', color:'#FF7776', bg:'#FFE8E8', textColor:'#CC2020', dotBg:'#FF7776', dotText:'#fff', initial:'E' },
 ]
 
-const SEED_EVENTS = [
-  { id:1,  title:'Grocery Run',     person:'brittani', date:'2026-04-05', start:10,  end:11   },
-  { id:2,  title:'Team Meeting',    person:'brittani', date:'2026-04-06', start:8,   end:9    },
-  { id:3,  title:'School',          person:'liam',     date:'2026-04-06', start:8,   end:15   },
-  { id:4,  title:'Project Review',  person:'brittani', date:'2026-04-06', start:12,  end:13   },
-  { id:5,  title:'Dentist',         person:'brittani', date:'2026-04-07', start:9,   end:10   },
-  { id:6,  title:'Soccer Practice', person:'liam',     date:'2026-04-07', start:15,  end:17   },
-  { id:7,  title:'BJJ Class',       person:'chris',    date:'2026-04-07', start:18,  end:19.5 },
-  { id:8,  title:'Piano',           person:'liam',     date:'2026-04-08', start:10,  end:11   },
-  { id:9,  title:'Client Call',     person:'brittani', date:'2026-04-08', start:14,  end:15   },
-  { id:10, title:'Work',            person:'ethan',    date:'2026-04-08', start:14,  end:22   },
-  { id:11, title:'Work',            person:'ethan',    date:'2026-04-09', start:10,  end:18   },
-  { id:12, title:'Date Night',      person:'brittani', date:'2026-04-10', start:19,  end:22   },
-  { id:13, title:'Date Night',      person:'chris',    date:'2026-04-10', start:19,  end:22   },
-  { id:14, title:'Art Class',       person:'liam',     date:'2026-04-11', start:10,  end:12   },
-  { id:15, title:'Electrician Job', person:'chris',    date:'2026-04-06', start:7,   end:16   },
-  { id:16, title:'Electrician Job', person:'chris',    date:'2026-04-07', start:7,   end:16   },
-  { id:17, title:'Electrician Job', person:'chris',    date:'2026-04-08', start:7,   end:16   },
-  { id:18, title:'Electrician Job', person:'chris',    date:'2026-04-09', start:7,   end:16   },
-]
+// No seed events; all calendar events come from Supabase or Google Calendar
 
-const INITIAL_DINNERS = {
-  '2026-04-05': { meal:'Spaghetti',     people:['brittani','chris','liam','ethan'] },
-  '2026-04-06': { meal:'Chicken Tacos', people:['brittani','chris','liam'] },
-  '2026-04-07': { meal:'Salmon',        people:['brittani','chris','liam','ethan'] },
-  '2026-04-08': { meal:'Pizza Night',   people:['brittani','chris','liam','ethan'] },
-  '2026-04-09': { meal:'Stir Fry',      people:['brittani','liam'] },
-  '2026-04-10': { meal:'Date Night',    people:['brittani','chris'] },
-  '2026-04-11': { meal:'Pot Roast',     people:['brittani','chris','liam','ethan'] },
-}
+const INITIAL_DINNERS = {}  // Dinner planning will be wired to Supabase later
 
 const SUBTAG_COLORS = {
   Finance:       { bg:'#D6EEC9', color:'#2A6B40' },
@@ -160,14 +133,12 @@ function MiniMonth({ selectedDate, onSelect }) {
           const d=new Date(yr,mo,day)
           const isTod=d.toDateString()===today.toDateString()
           const isSel=selectedDate&&d.toDateString()===selectedDate.toDateString()
-          const hasEv=SEED_EVENTS.some(e=>e.date===dateKey(d))
           return (
             <div key={i} onClick={()=>onSelect(d)}
               style={{textAlign:'center',padding:'4px 1px',borderRadius:'6px',cursor:'pointer',background:isSel?C.brightLav:isTod?C.lavVeil:'transparent'}}
               onMouseEnter={e=>{if(!isSel&&!isTod)e.currentTarget.style.background=C.lavVeil}}
               onMouseLeave={e=>{if(!isSel&&!isTod)e.currentTarget.style.background='transparent'}}>
               <span style={{...T.caption,fontWeight:isTod||isSel?800:500,color:isSel?'#fff':isTod?C.brightLav:C.textPrimary}}>{day}</span>
-              {hasEv&&!isSel&&<div style={{width:'3px',height:'3px',borderRadius:'50%',background:C.brightLav,margin:'1px auto 0',opacity:0.5}}/>}
             </div>
           )
         })}
@@ -225,34 +196,19 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
 
   function openAdd() { if(onAddEvent) onAddEvent() }
 
-  const [seedOverrides, setSeedOverrides] = useState({})
-
   function saveEdit(ev) {
-    const isSeed = SEED_EVENTS.some(e=>e.id===ev.id)
-    if(isSeed) {
-      setSeedOverrides(prev=>({...prev,[ev.id]:ev}))
-    } else {
-      if(onUpdateEvent) onUpdateEvent(ev)
-    }
+    if(onUpdateEvent) onUpdateEvent(ev)
     setEditingEvent(null)
     setSelectedEvent(null)
   }
 
   function deleteEv(id) {
-    const isSeed = SEED_EVENTS.some(e=>e.id===id)
-    if(isSeed) {
-      setSeedOverrides(prev=>({...prev,[id]:'deleted'}))
-    } else {
-      if(onDeleteEvent) onDeleteEvent(id)
-    }
+    if(onDeleteEvent) onDeleteEvent(id)
     setSelectedEvent(null)
   }
 
   const weekDates=getWeekDates(weekOffset)
   const allEvents=[
-    ...SEED_EVENTS
-      .filter(e=>seedOverrides[e.id]!=='deleted')
-      .map(e=>seedOverrides[e.id]||e),
     ...(customEvents||[]),
     ...gcalEvents,
   ]
