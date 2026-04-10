@@ -2,6 +2,8 @@
 // Runs server-side on Vercel. The ANTHROPIC_API_KEY env var is never exposed
 // to the browser. All task content passes through this function and is not
 // logged or stored.
+/* eslint-env node */
+/* global process */
 
 const ALLOWED_ORIGINS = [
   'https://moad-app.vercel.app',
@@ -71,7 +73,7 @@ export default async function handler(req, res) {
 
     const data = await upstream.json()
     return res.status(upstream.status).json(data)
-  } catch (err) {
+  } catch {
     // Do not log err.message — it may contain request content
     console.error('Claude proxy: upstream fetch failed')
     return res.status(502).json({ error: 'Upstream request failed' })

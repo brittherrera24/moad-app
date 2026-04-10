@@ -855,11 +855,11 @@ export default function Tasks({ taskData, setTaskData }) {
     setQuickLoading(true)
     setQuickPreview(null)
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 300,
           system: `You are a task parser for Brittani, an Operations & Account Manager at NW Media Collective. Parse natural language into a task object. Return ONLY valid JSON with these fields:
 - title: string (clean task title)
@@ -995,11 +995,11 @@ No markdown, no explanation, just JSON.`,
     ]
     const taskList = allTasks.map(t=>`[${t.section}] ${t.title}${t.client?' ('+t.client+')':''}${t.due?' due:'+t.due:''}${t.est?' ~'+t.est:''}`).join('\n')
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/claude', {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 1000,
           system: `You are a productivity assistant for Brittani, an Operations & Account Manager at NW Media Collective. She works Mon-Thu. Today is ${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}. Analyze her task list and return ONLY a JSON object with: { "priority": [top 3 task titles as strings], "defer": [2-3 task titles to move to next week], "insight": "one punchy sentence about her workload", "focus": "one suggested focus area for today" }. No markdown, no explanation, just JSON.`,
           messages:[{ role:'user', content:`Here are my current tasks:\n\n${taskList}\n\nGive me a triage.` }]
@@ -1026,11 +1026,11 @@ No markdown, no explanation, just JSON.`,
     const overdue = data.today.filter(t=>t.due && new Date(t.due+'T00:00:00') < new Date()).length
     const clientCount = [...data.today,...data.week,...data.waiting].filter(t=>t.type==='client').length
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/claude', {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 150,
           system: `You are a friendly, concise AI assistant for Brittani. Write a single punchy briefing sentence (max 20 words) about her day. Be warm but direct. No fluff.`,
           messages:[{ role:'user', content:`Tasks today: ${data.today.length}. Total open: ${totalOpen}. Overdue: ${overdue}. Client tasks: ${clientCount}. Today is ${new Date().toLocaleDateString('en-US',{weekday:'long'})}.` }]
