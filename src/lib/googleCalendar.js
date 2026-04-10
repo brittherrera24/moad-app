@@ -121,12 +121,18 @@ export async function connect() {
 
 // Silent token refresh: no popup, no user interaction.
 // Works after user has granted consent at least once.
+// Times out after 8 seconds to prevent hanging forever.
 async function silentRefresh() {
   await ensureGapi()
   await ensureGis()
   const p = initTokenClient()
   tokenClient.requestAccessToken({ prompt: '' })
-  return p
+  return Promise.race([
+    p,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Silent refresh timed out after 8s')), 8000)
+    ),
+  ])
 }
 
 // Initialize on app load. Tries to restore saved token; if expired, silently refreshes.
