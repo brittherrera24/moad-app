@@ -821,13 +821,17 @@ export default function Tasks({ taskData, setTaskData }) {
   const [dictating, setDictating]         = useState(false)
   const quickInputRef = useRef()
   const recognitionRef = useRef(null)
+  // Mutable ref so onend can read the latest input value without stale closure
+  const quickInputLatest = useRef('')
 
   function startDictation() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { alert('Speech recognition is not supported in this browser. Try Chrome.'); return }
     if (dictating) {
+      // Second tap: stop mic and auto-submit if there is content
       recognitionRef.current?.stop()
       setDictating(false)
+      if (quickInputLatest.current.trim()) runQuickAdd(quickInputLatest.current)
       return
     }
     const rec = new SR()
@@ -837,11 +841,16 @@ export default function Tasks({ taskData, setTaskData }) {
     rec.onstart = () => setDictating(true)
     rec.onresult = e => {
       const transcript = Array.from(e.results).map(r=>r[0].transcript).join('')
+      quickInputLatest.current = transcript   // keep ref in sync for onend
       setQuickInput(transcript)
       setQuickPreview(null)
     }
     rec.onerror = () => setDictating(false)
-    rec.onend = () => setDictating(false)
+    rec.onend = () => {
+      setDictating(false)
+      // Auto-submit when the mic stops for any reason (system cut-off, silence, etc.)
+      if (quickInputLatest.current.trim()) runQuickAdd(quickInputLatest.current)
+    }
     recognitionRef.current = rec
     rec.start()
     // Open AI card input, close manual form
@@ -850,8 +859,9 @@ export default function Tasks({ taskData, setTaskData }) {
     setTimeout(() => quickInputRef.current?.focus(), 100)
   }
 
-  async function runQuickAdd() {
-    if (!quickInput.trim()) return
+  async function runQuickAdd(inputOverride) {
+    const input = (inputOverride !== undefined ? inputOverride : quickInput).trim()
+    if (!input) return
     setQuickLoading(true)
     setQuickPreview(null)
     try {
@@ -875,7 +885,7 @@ Each object must have exactly these fields:
 - due: "YYYY-MM-DD" or ""
 - recur: "daily"|"weekly"|""
 No markdown, no explanation — just a JSON array.`,
-          messages: [{ role: 'user', content: quickInput }]
+          messages: [{ role: 'user', content: input }]
         })
       })
       const d = await res.json()
@@ -885,7 +895,7 @@ No markdown, no explanation — just a JSON array.`,
       // Normalise: always work with an array
       setQuickPreview(Array.isArray(parsed) ? parsed : [parsed])
     } catch {
-      setQuickPreview([{ title: quickInput.trim(), section: 'today', category: 'work', type: 'internal', client: '', est: '', due: '', recur: '' }])
+      setQuickPreview([{ title: input, section: 'today', category: 'work', type: 'internal', client: '', est: '', due: '', recur: '' }])
     }
     setQuickLoading(false)
     setQuickAddOpen(false)  // close modal so preview list is visible and clickable
@@ -911,12 +921,6 @@ No markdown, no explanation — just a JSON array.`,
     fireConfetti(e?.clientX || window.innerWidth / 2, e?.clientY || 200)
     setQuickPreview(null)
     setQuickInput('')
-  }
-
-  // Legacy single-add (kept for Escape/keyboard flow)
-  function confirmQuickAdd() {
-    if (!quickPreview?.length) return
-    confirmAllQuickAdd()
   }
 
   function fireConfetti(x, y) {
@@ -1346,7 +1350,7 @@ No markdown, no explanation — just a JSON array.`,
                     style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'#fff', cursor:'pointer', fontSize:'14px', borderRadius:'6px', width:'24px', height:'24px', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT }}>×</button>
                 </div>
                 <input ref={quickInputRef} value={quickInput}
-                  onChange={e=>{ setQuickInput(e.target.value); setQuickPreview(null) }}
+                  onChange={e=>{ quickInputLatest.current=e.target.value; setQuickInput(e.target.value); setQuickPreview(null) }}
                   onKeyDown={e=>{ if(e.key==='Enter') runQuickAdd(); if(e.key==='Escape'){ setQuickAddOpen(false); recognitionRef.current?.stop() } }}
                   placeholder={dictating ? 'Listening...' : 'One task, a list, or paste your notes...'}
                   style={{ width:'100%', padding:'10px 14px', borderRadius:'10px', border: dictating ? '1.5px solid rgba(255,255,255,0.7)' : '1.5px solid rgba(255,255,255,0.3)', background:'rgba(255,255,255,0.2)', color:'#FFFFFF', fontSize:'13px', fontFamily:FONT, outline:'none', boxSizing:'border-box' }}
