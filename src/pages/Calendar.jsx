@@ -529,10 +529,10 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
           {/* Google Calendar */}
           <div className="int-snap"
             onClick={gcalStatus === 'disconnected' && connectors?.gcal?.connect ? connectors.gcal.connect : undefined}>
-            <div className="int-icon-wrap" style={{background:gcalStatus==='connected'?'#4285F4':'#D39EF6'}}>
+            <div className="int-icon-wrap" style={{background:gcalStatus==='connected'?C.brightLav:'#D39EF6'}}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect x="2" y="4" width="12" height="9" rx="2" stroke={gcalStatus==='connected'?'#fff':'#EBDBFC'} strokeWidth="1.5"/>
-                <path d="M2 8h12M6 4V2M10 4V2" stroke={gcalStatus==='connected'?'#fff':'#EBDBFC'} strokeWidth="1.5" strokeLinecap="round"/>
+                <rect x="2" y="4" width="12" height="9" rx="2" stroke="#fff" strokeWidth="1.5"/>
+                <path d="M2 8h12M6 4V2M10 4V2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </div>
             <div className="int-name">Google Cal</div>

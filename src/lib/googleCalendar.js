@@ -126,7 +126,7 @@ async function silentRefresh() {
   await ensureGapi()
   await ensureGis()
   const p = initTokenClient()
-  tokenClient.requestAccessToken({ prompt: '' })
+  tokenClient.requestAccessToken({ prompt: 'none' })
   return Promise.race([
     p,
     new Promise((_, reject) =>
