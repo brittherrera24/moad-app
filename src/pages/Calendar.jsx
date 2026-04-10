@@ -503,56 +503,56 @@ export default function Calendar({ taskData, setTaskData, customEvents, onAddEve
           </div>
         </div>
 
-        {/* Connectors bar */}
-        {connectors?.gcal && (
-          <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+        {/* Connectors bar — matches Tasks page widget squares */}
+        <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+          {/* Google Calendar widget */}
+          {connectors?.gcal && (
             <div
               onClick={gcalStatus === 'disconnected' && connectors.gcal.connect ? connectors.gcal.connect : undefined}
               style={{
                 background:C.card, borderRadius:'16px', border:`1px solid ${C.border}`,
-                boxShadow:C.shadowSm, padding:'12px 16px', display:'flex', alignItems:'center', gap:'12px',
-                cursor:gcalStatus==='disconnected'?'pointer':'default', transition:'all 0.2s',
-                fontFamily:FONT, minWidth:'180px',
+                boxShadow:C.shadowSm, padding:'12px', display:'flex', flexDirection:'column',
+                justifyContent:'space-between', transition:'box-shadow 0.2s',
+                cursor:gcalStatus==='disconnected'?'pointer':'default',
+                boxSizing:'border-box', overflow:'hidden', flex:'0 0 160px', minHeight:'90px',
+                fontFamily:FONT,
               }}
               onMouseEnter={e=>{e.currentTarget.style.boxShadow=C.shadowMd}}
               onMouseLeave={e=>{e.currentTarget.style.boxShadow=C.shadowSm}}
             >
-              {/* Icon square */}
-              <div style={{width:'36px',height:'36px',borderRadius:'10px',background:gcalStatus==='connected'?'#4285F4':'#E8E6ED',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                  <rect x="2" y="3" width="12" height="11" rx="2" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.4"/>
-                  <path d="M2 6.5h12" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.4"/>
-                  <circle cx="5.5" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
-                  <circle cx="8" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
-                  <circle cx="10.5" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
-                  <path d="M5 1v3M11 1v3" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.3" strokeLinecap="round"/>
-                </svg>
+              {/* Top: number + icon */}
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
+                <div style={{fontSize:'clamp(18px, 2vw, 28px)',fontWeight:800,color:gcalStatus==='connected'?'#4285F4':C.textMuted,lineHeight:1,fontFamily:FONT}}>
+                  {gcalStatus==='connected' ? gcalEvents.length : gcalStatus==='loading' ? '...' : '0'}
+                </div>
+                <div style={{width:'28px',height:'28px',borderRadius:'8px',background:gcalStatus==='connected'?'#4285F4':'#E8E6ED',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <rect x="2" y="3" width="12" height="11" rx="2" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.4"/>
+                    <path d="M2 6.5h12" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.4"/>
+                    <circle cx="5.5" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
+                    <circle cx="8" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
+                    <circle cx="10.5" cy="9.5" r="1" fill={gcalStatus==='connected'?'#fff':'#9793A0'}/>
+                    <path d="M5 1v3M11 1v3" stroke={gcalStatus==='connected'?'#fff':'#9793A0'} strokeWidth="1.3" strokeLinecap="round"/>
+                  </svg>
+                </div>
               </div>
-              {/* Label + status light */}
-              <div style={{display:'flex',flexDirection:'column',gap:'3px',minWidth:0}}>
-                <span style={{...T.bodySm,fontWeight:700,color:C.textPrimary,whiteSpace:'nowrap'}}>Google Calendar</span>
-                <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+              {/* Bottom: label + status */}
+              <div>
+                <div style={{...T.label,fontWeight:700,color:C.textMuted,textTransform:'uppercase',letterSpacing:'0.06em'}}>Google Cal</div>
+                <div style={{display:'flex',alignItems:'center',gap:'4px',marginTop:'2px'}}>
                   <div style={{
-                    width:'7px',height:'7px',borderRadius:'50%',flexShrink:0,
+                    width:'6px',height:'6px',borderRadius:'50%',flexShrink:0,
                     background: gcalStatus==='connected' ? '#34A853' : gcalStatus==='loading' ? '#FBBC05' : '#FF7776',
-                    boxShadow: gcalStatus==='connected' ? '0 0 6px rgba(52,168,83,0.5)' : gcalStatus==='loading' ? '0 0 6px rgba(251,188,5,0.5)' : 'none',
+                    boxShadow: gcalStatus==='connected' ? '0 0 4px rgba(52,168,83,0.5)' : gcalStatus==='loading' ? '0 0 4px rgba(251,188,5,0.5)' : 'none',
                   }}/>
-                  <span style={{...T.caption,color:C.textMuted,textTransform:'uppercase',letterSpacing:'0.04em'}}>
-                    {gcalStatus==='connected' ? `${gcalEvents.length} events` : gcalStatus==='loading' ? 'Connecting...' : 'Click to connect'}
+                  <span style={{...T.micro,fontWeight:500,color:C.textMuted}}>
+                    {gcalStatus==='connected' ? 'Connected' : gcalStatus==='loading' ? 'Connecting' : 'Tap to connect'}
                   </span>
                 </div>
               </div>
-              {/* Disconnect button when connected */}
-              {gcalStatus==='connected' && connectors.gcal.disconnect && (
-                <button
-                  onClick={e=>{e.stopPropagation();connectors.gcal.disconnect()}}
-                  style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:C.textMuted,fontSize:'14px',padding:'4px',lineHeight:1}}
-                  title="Disconnect Google Calendar"
-                >{'\u00D7'}</button>
-              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         </div>{/* end calendar column */}
 
